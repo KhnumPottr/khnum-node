@@ -5,29 +5,27 @@
 
 using namespace websockets;
 
-const String sensorName = "esp8622_jessica";
-const char *ssid = "****";
-const char *password = "****";
-const char* websockets_server = "****";
+const String sensorName = "esp8622_red";
+const char *ssid = "*****";
+const char *password = "*****";
+const char* websockets_server = "ws://has.local:8080/nodeData";
 
 const int SIZE = 10;
 LinkedList<int> moistureList = LinkedList<int>();
 
-const int DRY = 750;
-const int WET = 340;
-
-const int ledPin = 2;
+const int DRY = 610;
+const int WET = 305;
 
 const int inputPin1 = A0;
 
 int oldAvg = 0;
+int lastReportedAvg = 0;
 unsigned long lastMillis;
 
 bool wsConnected = false;
 WebsocketsClient client;
 
 void setup() {
-  digitalWrite(ledPin, LOW);
   Serial.begin(115200); // Serial connection
   WiFi.hostname(sensorName);
   WiFi.begin(ssid, password); // WiFi connection
@@ -37,8 +35,6 @@ void setup() {
     delay(500);
     Serial.println("Connecting to WiFi...");
   }
-
-  pinMode(ledPin, 1);
 
   Serial.print("IP address:\t");
   Serial.println(WiFi.localIP());
@@ -50,22 +46,28 @@ void setup() {
 }
 
 void loop() {
-  if (wsConnected) {
+  if (client.available()) {
     int moistureReading = analogRead(inputPin1);
     int avg = calculateAverage(moistureReading);
     int avgChange = oldAvg - avg;
+    int lastReportedavgChange = lastReportedAvg - avg;
     oldAvg = avg;
-    if(avgChange >= 3 || avgChange <= -3){
+    if(avgChange >= 3 || avgChange <= -3 || lastReportedavgChange >= 3 || lastReportedavgChange <= -3){
+      lastReportedAvg = avg;
       lastMillis = millis();
       client.send(prepareData(avg));
     } else if(millis() - lastMillis >= 60*60*1000UL){
       lastMillis = millis();
       client.send(prepareData(avg));
     }
-    delay(500);
+    delay(1000);
   }else {
     delay(10000);
+    Serial.println("Connecting to controler");
     client.connect(websockets_server);
+    if (wsConnected) {
+      Serial.println("Connected");
+    }
   }
 }
 
@@ -99,20 +101,23 @@ void onEventsCallback(WebsocketsEvent event, String data) {
 }
 
 int calculateAverage(int currentReading) {
+  Serial.printf("Current Reading: %d \n", currentReading);
   int sumReadings = 0;
   int rollingAvg = -1;
   if (moistureList.size() > SIZE) {
-    moistureList.pop();
+    moistureList.shift();
   }
-  moistureList.unshift(currentReading);
+  moistureList.add(currentReading);
   if (moistureList.size() >= SIZE) {
     for (int i = 0; i < moistureList.size(); i++) {
       sumReadings += moistureList.get(i);
     }
-    rollingAvg = sumReadings / SIZE;
+    rollingAvg = sumReadings / moistureList.size();
   }
   if (rollingAvg == -1) {
     return map(DRY, DRY, WET, 0, 100);
   }
+  Serial.printf("rolling average: %d\n", rollingAvg);
+  Serial.printf("Percentage: %d\n", map(rollingAvg, DRY, WET, 0, 100));
   return map(rollingAvg, DRY, WET, 0, 100);
 }
