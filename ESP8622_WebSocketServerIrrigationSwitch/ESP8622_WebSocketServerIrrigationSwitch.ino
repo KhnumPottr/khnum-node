@@ -4,9 +4,9 @@
 
 using namespace websockets;
 
-const String sensorName = "esp8622_red";
-const char *ssid = "*****";
-const char *password = "*****";
+const String sensorName = "esp8622_irrigationController";
+const char *ssid = "OrbiWifiMesh";
+const char *password = "97e977fb";
 const char* websockets_server = "ws://has.local:8080/irrigate";
 
 
